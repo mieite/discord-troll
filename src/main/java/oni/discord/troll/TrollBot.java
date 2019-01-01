@@ -14,7 +14,6 @@ import net.dv8tion.jda.core.events.guild.member.GuildMemberLeaveEvent;
 import net.dv8tion.jda.core.events.guild.member.GuildMemberRoleAddEvent;
 import net.dv8tion.jda.core.events.guild.member.GuildMemberRoleRemoveEvent;
 import net.dv8tion.jda.core.hooks.ListenerAdapter;
-import net.dv8tion.jda.core.utils.PermissionUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -88,7 +87,6 @@ public class TrollBot extends ListenerAdapter {
 
     private void checkGuildMemberStatuses(Guild source, Guild target) {
         List<Member> sourceMembers = source.getMembers();
-        List<Member> targetMembers = target.getMembers();
 
         // check bans and kicks first
         mergeBans(source, target);
@@ -99,7 +97,7 @@ public class TrollBot extends ListenerAdapter {
             if(sourceMember.hasPermission(Permission.ADMINISTRATOR)) {
                 continue;
             }
-            Member targetMember = target.getMemberById(sourceMember.getUser().getId());
+            Member targetMember = target.getMember(sourceMember.getUser());
             // if user is missing ignore, bans and kicks have already been handled
             // also do nothing to admins
             if(targetMember == null || targetMember.hasPermission(Permission.ADMINISTRATOR)) {
@@ -187,7 +185,7 @@ public class TrollBot extends ListenerAdapter {
         }
         if(hasRole(event.getRoles(), roleMember)) {
             Guild toUpdateGuild = getOtherGuild(event.getGuild());
-            Member otherGuildMember = toUpdateGuild.getMemberById(event.getMember().getUser().getId());
+            Member otherGuildMember = toUpdateGuild.getMember(event.getMember().getUser());
             if(otherGuildMember != null) {
                 toUpdateGuild.getController().addSingleRoleToMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMember))
                                                             .reason("cloned from " + event.getGuild().getName()).queue();
@@ -201,7 +199,7 @@ public class TrollBot extends ListenerAdapter {
             return;
         }
         Guild toUpdateGuild = getOtherGuild(event.getGuild());
-        Member otherGuildMember = toUpdateGuild.getMemberById(event.getMember().getUser().getId());
+        Member otherGuildMember = toUpdateGuild.getMember(event.getMember().getUser());
         if(!otherGuildMember.hasPermission(Permission.ADMINISTRATOR) && hasRole(event.getRoles(), roleMember)) {
             toUpdateGuild.getController().removeSingleRoleFromMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMember))
                                                     .reason("cloned from " + event.getGuild().getName()).queue();
@@ -215,7 +213,7 @@ public class TrollBot extends ListenerAdapter {
             return;
         }
         Guild toUpdateGuild = getOtherGuild(event.getGuild());
-        Member otherGuildMember = toUpdateGuild.getMemberById(event.getUser().getId());
+        Member otherGuildMember = toUpdateGuild.getMember(event.getUser());
         if(otherGuildMember == null || !otherGuildMember.hasPermission(Permission.ADMINISTRATOR)) {
             toUpdateGuild.getController().ban(event.getUser().getId(), 0, "cloned from " + event.getGuild().getName()).queue();
         }
@@ -240,7 +238,9 @@ public class TrollBot extends ListenerAdapter {
         User leaver = event.getUser();
         Guild sourceGuild = event.getGuild();
         Guild toUpdateGuild = getOtherGuild(event.getGuild());
-        if(!toUpdateGuild.isMember(leaver)) {
+
+        // don't try to kick non-existing members or administrators
+        if(!toUpdateGuild.isMember(leaver) || toUpdateGuild.getMember(leaver).hasPermission(Permission.ADMINISTRATOR) ) {
             return;
         }
         // check if leaving was a kick. compare dates since there's no direct relation between the event and the audit event

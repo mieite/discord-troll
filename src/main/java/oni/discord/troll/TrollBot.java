@@ -94,14 +94,8 @@ public class TrollBot extends ListenerAdapter {
         mergeKicks(source, target);
 
         for(Member sourceMember : sourceMembers) {
-            // ignore admin roles
-            if(sourceMember.hasPermission(Permission.ADMINISTRATOR)) {
-                continue;
-            }
             Member targetMember = target.getMember(sourceMember.getUser());
-            // if user is missing ignore, bans and kicks have already been handled
-            // also do nothing to admins
-            if(targetMember == null || targetMember.hasPermission(Permission.ADMINISTRATOR)) {
+            if(targetMember == null) {
                 continue;
             }
             // check if sourceMember has member role
@@ -127,7 +121,10 @@ public class TrollBot extends ListenerAdapter {
 
         for(Guild.Ban ban : source.getBanList().complete()) {
             if(targetBans.stream().noneMatch(b -> ban.getUser().getId().equals(b.getUser().getId()))) {
-                target.getController().ban(ban.getUser(), 0, ban.getReason() + " / cloned from " + source.getName()).queue();
+                Member member = target.getMember(ban.getUser());
+                if(member == null || !member.hasPermission(Permission.ADMINISTRATOR)) {
+                    target.getController().ban(ban.getUser(), 0, ban.getReason() + " / cloned from " + source.getName()).queue();
+                }
             }
         }
     }

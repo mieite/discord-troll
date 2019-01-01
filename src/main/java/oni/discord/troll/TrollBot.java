@@ -64,14 +64,35 @@ public class TrollBot extends ListenerAdapter {
             logger.error("Servers configured wrong or bot not invited to servers, aborting");
             System.exit(-1);
         }
+        boolean problem = verifyRoles(guild1);
+        problem |= verifyRoles(guild2);
+
+        if(!problem) {
+            logger.info("Roles verified successfully.");
+        }
+
         executorService.scheduleAtFixedRate(new Runnable() {
             public void run() {
                 testRepeatFunction();
             }
         }, 1, 5, TimeUnit.SECONDS);
-        logger.info("initialized");
+        logger.info("Merging user roles");
         initUserRoles();
         jda.addEventListener(this);
+        logger.info("Initialized");
+    }
+
+    private boolean verifyRoles(Guild guild) {
+        boolean problem = false;
+        if(!hasRole(guild.getRoles(), roleMember)) {
+            logger.warn(guild.getName() + " missing role " + roleMember);
+            problem = true;
+        }
+        if(!hasRole(guild.getRoles(), roleMute)) {
+            logger.warn(guild.getName() + " missing role " + roleMute);
+            problem = true;
+        }
+        return problem;
     }
 
     // check all user roles to verify that current status is OK
@@ -82,7 +103,9 @@ public class TrollBot extends ListenerAdapter {
     }
 
     private void mergeMemberStatuses() {
+        logger.debug("Merging " + guild1.getName() + " to " + guild2.getName());
         checkGuildMemberStatuses(guild1, guild2);
+        logger.debug("Merging " + guild2.getName() + " to " + guild1.getName());
         checkGuildMemberStatuses(guild2, guild1);
     }
 
@@ -118,12 +141,14 @@ public class TrollBot extends ListenerAdapter {
     }
 
     private void mergeBans(Guild source, Guild target) {
+        logger.debug("Merging bans");
         List<Guild.Ban> targetBans = target.getBanList().complete();
 
         for(Guild.Ban ban : source.getBanList().complete()) {
             if(targetBans.stream().noneMatch(b -> ban.getUser().getId().equals(b.getUser().getId()))) {
                 Member member = target.getMember(ban.getUser());
                 if(member == null || !member.hasPermission(Permission.ADMINISTRATOR)) {
+                    logger.debug("Missing ban found: " + ban.toString());
                     target.getController().ban(ban.getUser(), 0, ban.getReason() + " / cloned from " + source.getName()).queue();
                 }
             }
@@ -131,6 +156,7 @@ public class TrollBot extends ListenerAdapter {
     }
 
     private void mergeKicks(Guild source, Guild target) {
+        logger.debug("Merging kicks");
         source.getAuditLogs().type(ActionType.KICK).queue(new Consumer<List<AuditLogEntry>>() {
             @Override
             public void accept(List<AuditLogEntry> auditLogEntries) {
@@ -140,6 +166,7 @@ public class TrollBot extends ListenerAdapter {
                     if(member != null && !member.hasPermission(Permission.ADMINISTRATOR)
                             && logEntry.getCreationTime().isAfter(member.getJoinDate())
                             && logEntry.getCreationTime().isBefore(OffsetDateTime.now().minus(1, ChronoUnit.DAYS))) {
+                        logger.debug("Missing kick found: " + logEntry.toString());
                         target.getController().kick(member, logEntry.getReason() + " / Cloned from " + source.getName());
                     }
                 }
@@ -161,7 +188,7 @@ public class TrollBot extends ListenerAdapter {
     }
 
     private Role getRoleByName(List<Role> roles, String role) {
-        return roles.stream().filter(x -> role.equalsIgnoreCase(x.getName())).findFirst().get();
+        return roles.stream().filter(x -> role.equalsIgnoreCase(x.getName())).findFirst().orElse(null);
     }
 
     private void testRepeatFunction() {
@@ -191,10 +218,14 @@ public class TrollBot extends ListenerAdapter {
         }
 
         if(hasRole(event.getRoles(), roleMember)) {
+            logger.debug("cloning " + roleMember + " ADD to user " + otherGuildMember.getEffectiveName() + " / " + otherGuildMember.getUser().getId()
+                    + " from server \"" + event.getGuild().getName() + "\" to " + toUpdateGuild.getName());
             toUpdateGuild.getController().addSingleRoleToMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMember))
                     .reason("cloned from " + event.getGuild().getName()).queue();
         }
         if(hasRole(event.getRoles(), roleMute)) {
+            logger.debug("cloning " + roleMute + " ADD to user " + otherGuildMember.getEffectiveName() + " / " + otherGuildMember.getUser().getId()
+                    + " from server \"" + event.getGuild().getName() + "\" to " + toUpdateGuild.getName());
             toUpdateGuild.getController().addSingleRoleToMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMute))
                     .reason("cloned from " + event.getGuild().getName()).queue();
         }
@@ -212,10 +243,14 @@ public class TrollBot extends ListenerAdapter {
         }
 
         if(hasRole(event.getRoles(), roleMember)) {
+            logger.debug("cloning " + roleMember + " REMOVE to user " + otherGuildMember.getEffectiveName() + " / " + otherGuildMember.getUser().getId()
+                    + " from server \"" + event.getGuild().getName() + "\" to " + toUpdateGuild.getName());
             toUpdateGuild.getController().removeSingleRoleFromMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMember))
                                                     .reason("cloned from " + event.getGuild().getName()).queue();
         }
         if(hasRole(event.getRoles(), roleMute)) {
+            logger.debug("cloning " + roleMute + " REMOVE to user " + otherGuildMember.getEffectiveName() + " / " + otherGuildMember.getUser().getId()
+                    + " from server \"" + event.getGuild().getName() + "\" to " + toUpdateGuild.getName());
             toUpdateGuild.getController().removeSingleRoleFromMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMute))
                     .reason("cloned from " + event.getGuild().getName()).queue();
         }
@@ -230,6 +265,8 @@ public class TrollBot extends ListenerAdapter {
         Guild toUpdateGuild = getOtherGuild(event.getGuild());
         Member otherGuildMember = toUpdateGuild.getMember(event.getUser());
         if(otherGuildMember == null || !otherGuildMember.hasPermission(Permission.ADMINISTRATOR)) {
+            logger.debug("cloning BAN to user " + event.getUser().getName() + " / " + event.getUser().getId()
+                    + " from server \"" + event.getGuild().getName() + "\" to " + toUpdateGuild.getName());
             toUpdateGuild.getController().ban(event.getUser().getId(), 0, "cloned from " + event.getGuild().getName()).queue();
         }
     }
@@ -242,6 +279,8 @@ public class TrollBot extends ListenerAdapter {
         Guild toUpdateGuild = getOtherGuild(event.getGuild());
         Guild.Ban updateGuildBan = toUpdateGuild.getBanById(event.getUser().getId()).complete();
         if(updateGuildBan != null) {
+            logger.debug("cloning UNBAN to user " + event.getUser().getName() + " / " + event.getUser().getId()
+                    + " from server \"" + event.getGuild().getName() + "\" to " + toUpdateGuild.getName());
             toUpdateGuild.getController().unban(event.getUser().getId()).reason("cloned from " + event.getGuild().getName()).queue();
         }
     }
@@ -257,9 +296,13 @@ public class TrollBot extends ListenerAdapter {
             return;
         }
         if(hasRole(otherGuildMember.getRoles(), roleMember)) {
+            logger.debug("cloning " + roleMember + " to JOIN user " + event.getUser().getName() + " / " + event.getUser().getId()
+                    + " from server \"" + event.getGuild().getName() + "\" to " + otherGuild.getName());
             event.getGuild().getController().addSingleRoleToMember(event.getMember(), getRoleByName(event.getGuild().getRoles(), roleMember))
                                             .reason("cloned from " + otherGuild.getName()).queue();
         } else if(hasRole(otherGuildMember.getRoles(), roleMute)) {
+            logger.debug("cloning " + roleMute + " to JOIN user " + event.getUser().getName() + " / " + event.getUser().getId()
+                    + " from server \"" + event.getGuild().getName() + "\" to " + otherGuild.getName());
             event.getGuild().getController().addSingleRoleToMember(event.getMember(), getRoleByName(event.getGuild().getRoles(), roleMute))
                     .reason("cloned from " + otherGuild.getName()).queue();
         }
@@ -283,6 +326,8 @@ public class TrollBot extends ListenerAdapter {
         AuditLogEntry auditLogEntry = logEvents.stream().filter(log -> log.getTargetId().equals(event.getUser().getId())
                 && dateBetweenRange(log.getCreationTime(), OffsetDateTime.now(), 10, ChronoUnit.SECONDS)).findFirst().get();
         if(auditLogEntry != null) {
+            logger.debug("cloning KICK to user " + leaver.getName() + " / " + leaver.getId() + " from server " + event.getGuild().getName()
+                                                + " to server " + toUpdateGuild.getName());
             toUpdateGuild.getController().kick(leaver.getId(), auditLogEntry.getReason() + " / cloned from " + sourceGuild.getName()).queue();
         }
     }
@@ -294,7 +339,11 @@ public class TrollBot extends ListenerAdapter {
     }
 
     private boolean verifyGuild(Guild guild) {
-        return guild.getId().equals(guild1.getId()) || guild.getId().equals(guild2.getId());
+        boolean result =  guild.getId().equals(guild1.getId()) || guild.getId().equals(guild2.getId());
+        if(!result) {
+            logger.warn("WARNING: Getting messages from non-configured server: " + guild.getName() + " / " + guild.getId());
+        }
+        return result;
     }
 
     private Guild getOtherGuild(Guild guild) {

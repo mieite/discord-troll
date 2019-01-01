@@ -33,6 +33,7 @@ import net.dv8tion.jda.core.events.guild.member.GuildMemberRoleAddEvent;
 import net.dv8tion.jda.core.events.guild.member.GuildMemberRoleRemoveEvent;
 import net.dv8tion.jda.core.hooks.ListenerAdapter;
 import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -147,9 +148,7 @@ public class TrollBot extends ListenerAdapter {
             if(hasRole(sourceMember.getRoles(), roleMember) && !hasRole(targetMember.getRoles(), roleMember)) {
                 // don't give member role to users who are still muted or have other roles that require user to
                 // not have member role
-                List<String> roles = new ArrayList<String>();
-                roles.add(roleMute);
-                roles.addAll(roleOtherMutes);
+                List<String> roles = getMuteAndOthersList();
                 if(!hasAnyRole(targetMember.getRoles(), roles)) {
                     target.getController().addSingleRoleToMember(targetMember, getRoleByName(target.getRoles(), roleMember))
                             .reason("Cloned from " + source.getName()).queue();
@@ -161,6 +160,13 @@ public class TrollBot extends ListenerAdapter {
                             .reason("Cloned from " + source.getName()).queue();
             }
         }
+    }
+
+    private List<String> getMuteAndOthersList() {
+        List<String> roles = new ArrayList<String>();
+        roles.add(roleMute);
+        roles.addAll(roleOtherMutes);
+        return roles;
     }
 
     private void mergeBans(Guild source, Guild target) {
@@ -247,7 +253,9 @@ public class TrollBot extends ListenerAdapter {
             return;
         }
 
-        if(hasRole(event.getRoles(), roleMember) && !hasRole(otherGuildMember.getRoles(), roleMember)) {
+        // don't give member role if user has mute or other roles preventing member roled
+        if(hasRole(event.getRoles(), roleMember) && !hasRole(otherGuildMember.getRoles(), roleMember)
+                && !hasAnyRole(otherGuildMember.getRoles(), getMuteAndOthersList())) {
             logger.debug("Cloning " + roleMember + " ADD to user " + otherGuildMember.getEffectiveName() + " / " + otherGuildMember.getUser().getId()
                     + " from server \"" + event.getGuild().getName() + "\" to " + toUpdateGuild.getName());
             toUpdateGuild.getController().addSingleRoleToMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMember))

@@ -98,20 +98,21 @@ public class TrollBot extends ListenerAdapter {
             if(targetMember == null) {
                 continue;
             }
-            // check if sourceMember has member role
-            if(hasRole(sourceMember.getRoles(), roleMember)) {
-                // check that sourceMember is on the server and sourceMember status
-                if(!hasRole(targetMember.getRoles(), roleMember)) {
-                    // check that sourceMember isn't admin or muted or has other mute roles that remove member role
-                    List<String> roles = Collections.singletonList(roleMute);
-                    roles.addAll(roleOtherMutes);
-                    if(!hasAnyRole(targetMember.getRoles(), roles)) {
-                        target.getController().addRolesToMember(targetMember, getRoleByName(guild1.getRoles(), roleMember)).queue();
-                    }
+            // check member status
+            if(hasRole(sourceMember.getRoles(), roleMember) && !hasRole(targetMember.getRoles(), roleMember)) {
+                // don't give member role to users who are still muted or have other roles that require user to
+                // not have member role
+                List<String> roles = Collections.singletonList(roleMute);
+                roles.addAll(roleOtherMutes);
+                if(!hasAnyRole(targetMember.getRoles(), roles)) {
+                    target.getController().addSingleRoleToMember(targetMember, getRoleByName(target.getRoles(), roleMember))
+                            .reason("cloned from " + source.getName()).queue();
                 }
+            }
             // check mute status
-            } else if(hasRole(sourceMember.getRoles(), roleMute)) {
-                target.getController().addRolesToMember(targetMember, getRoleByName(guild1.getRoles(), roleMute)).queue();
+            if(hasRole(sourceMember.getRoles(), roleMute) && !hasRole(targetMember.getRoles(), roleMute)) {
+                target.getController().addSingleRoleToMember(targetMember, getRoleByName(target.getRoles(), roleMute))
+                            .reason("cloned from " + source.getName()).queue();
             }
         }
     }

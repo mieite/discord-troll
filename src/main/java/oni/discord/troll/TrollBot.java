@@ -184,12 +184,17 @@ public class TrollBot extends ListenerAdapter {
         if(!verifyGuild(event.getGuild())) {
             return;
         }
-        if(hasRole(event.getRoles(), roleMember)) {
-            Guild toUpdateGuild = getOtherGuild(event.getGuild());
-            Member otherGuildMember = toUpdateGuild.getMember(event.getMember().getUser());
-            if(otherGuildMember != null) {
+
+        Guild toUpdateGuild = getOtherGuild(event.getGuild());
+        Member otherGuildMember = toUpdateGuild.getMember(event.getMember().getUser());
+        if(otherGuildMember != null) {
+            if(hasRole(event.getRoles(), roleMember)) {
                 toUpdateGuild.getController().addSingleRoleToMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMember))
-                                                            .reason("cloned from " + event.getGuild().getName()).queue();
+                        .reason("cloned from " + event.getGuild().getName()).queue();
+            }
+            if(hasRole(event.getRoles(), roleMute)) {
+                toUpdateGuild.getController().addSingleRoleToMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMute))
+                        .reason("cloned from " + event.getGuild().getName()).queue();
             }
         }
     }
@@ -201,9 +206,17 @@ public class TrollBot extends ListenerAdapter {
         }
         Guild toUpdateGuild = getOtherGuild(event.getGuild());
         Member otherGuildMember = toUpdateGuild.getMember(event.getMember().getUser());
-        if(!otherGuildMember.hasPermission(Permission.ADMINISTRATOR) && hasRole(event.getRoles(), roleMember)) {
+        if(otherGuildMember == null || !otherGuildMember.hasPermission(Permission.ADMINISTRATOR)) {
+            return;
+        }
+
+        if(hasRole(event.getRoles(), roleMember)) {
             toUpdateGuild.getController().removeSingleRoleFromMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMember))
                                                     .reason("cloned from " + event.getGuild().getName()).queue();
+        }
+        if(hasRole(event.getRoles(), roleMute)) {
+            toUpdateGuild.getController().removeSingleRoleFromMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMute))
+                    .reason("cloned from " + event.getGuild().getName()).queue();
         }
 
     }

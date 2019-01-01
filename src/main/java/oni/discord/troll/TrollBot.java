@@ -10,6 +10,7 @@ import net.dv8tion.jda.core.entities.Role;
 import net.dv8tion.jda.core.entities.User;
 import net.dv8tion.jda.core.events.guild.GuildBanEvent;
 import net.dv8tion.jda.core.events.guild.GuildUnbanEvent;
+import net.dv8tion.jda.core.events.guild.member.GuildMemberJoinEvent;
 import net.dv8tion.jda.core.events.guild.member.GuildMemberLeaveEvent;
 import net.dv8tion.jda.core.events.guild.member.GuildMemberRoleAddEvent;
 import net.dv8tion.jda.core.events.guild.member.GuildMemberRoleRemoveEvent;
@@ -231,6 +232,20 @@ public class TrollBot extends ListenerAdapter {
         }
     }
 
+    @Override
+    public void onGuildMemberJoin(GuildMemberJoinEvent event) {
+        if(!verifyGuild(event.getGuild())) {
+            return;
+        }
+        Guild otherGuild = getOtherGuild(event.getGuild());
+        Member otherGuildMember = otherGuild.getMember(event.getUser());
+        if(otherGuildMember != null && hasRole(otherGuildMember.getRoles(), roleMember)) {
+            event.getGuild().getController().addSingleRoleToMember(event.getMember(), getRoleByName(event.getGuild().getRoles(), roleMember))
+                                            .reason("cloned from " + otherGuild.getName()).queue();
+        }
+    }
+
+    @Override
     public void onGuildMemberLeave(GuildMemberLeaveEvent event) {
         if(!verifyGuild(event.getGuild())) {
             return;

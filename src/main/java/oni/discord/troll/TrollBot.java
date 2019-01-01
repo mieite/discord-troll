@@ -214,6 +214,11 @@ public class TrollBot extends ListenerAdapter {
         return roles.stream().filter(x -> role.equalsIgnoreCase(x.getName())).findFirst().orElse(null);
     }
 
+    private boolean hasBan(Guild guild, String userId) {
+        List<Guild.Ban> banList = guild.getBanList().complete();
+        return banList.stream().anyMatch(b -> b.getUser().getId().equals(userId));
+    }
+
     private void testRepeatFunction() {
         //if(!validateGuildAmount()) return;
         guild2.getAuditLogs().user("240432007908294656").queue(new Consumer<List<AuditLogEntry>>() {
@@ -269,13 +274,13 @@ public class TrollBot extends ListenerAdapter {
             return;
         }
 
-        if(hasRole(event.getRoles(), roleMember) && !hasRole(otherGuildMember.getRoles(), roleMember)) {
+        if(hasRole(event.getRoles(), roleMember) && hasRole(otherGuildMember.getRoles(), roleMember)) {
             logger.debug("Cloning " + roleMember + " REMOVE to user " + otherGuildMember.getEffectiveName() + " / " + otherGuildMember.getUser().getId()
                     + " from server \"" + event.getGuild().getName() + "\" to " + toUpdateGuild.getName());
             toUpdateGuild.getController().removeSingleRoleFromMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMember))
                                                     .reason("Cloned from " + event.getGuild().getName()).queue();
         }
-        if(hasRole(event.getRoles(), roleMute) && !hasRole(otherGuildMember.getRoles(), roleMute)) {
+        if(hasRole(event.getRoles(), roleMute) && hasRole(otherGuildMember.getRoles(), roleMute)) {
             logger.debug("Cloning " + roleMute + " REMOVE to user " + otherGuildMember.getEffectiveName() + " / " + otherGuildMember.getUser().getId()
                     + " from server \"" + event.getGuild().getName() + "\" to " + toUpdateGuild.getName());
             toUpdateGuild.getController().removeSingleRoleFromMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMute))
@@ -294,10 +299,10 @@ public class TrollBot extends ListenerAdapter {
         Guild toUpdateGuild = getOtherGuild(event.getGuild());
         Member otherGuildMember = toUpdateGuild.getMember(event.getUser());
         if(otherGuildMember == null || !otherGuildMember.hasPermission(Permission.ADMINISTRATOR)
-                && toUpdateGuild.getBan(otherGuildMember.getUser()).complete() == null) {
+                && !hasBan(toUpdateGuild, otherGuildMember.getUser().getId())) {
             logger.debug("Cloning BAN to user " + event.getUser().getName() + " / " + event.getUser().getId()
                     + " from server \"" + event.getGuild().getName() + "\" to " + toUpdateGuild.getName());
-            toUpdateGuild.getController().ban(event.getUser().getId(), 0, "Cloned from " + event.getGuild().getName()).queue();
+            toUpdateGuild.getController().ban(event.getUser(), 0, "Cloned from " + event.getGuild().getName()).queue();
         }
     }
 
@@ -309,11 +314,14 @@ public class TrollBot extends ListenerAdapter {
         logger.debug("Received UNBAN event from " + event.getGuild().getName());
         
         Guild toUpdateGuild = getOtherGuild(event.getGuild());
+        if(!hasBan(toUpdateGuild, event.getUser().getId())) {
+            return;
+        }
         Guild.Ban updateGuildBan = toUpdateGuild.getBanById(event.getUser().getId()).complete();
-        if(updateGuildBan != null && toUpdateGuild.getBan(event.getUser()).complete() != null) {
+        if(updateGuildBan != null) {
             logger.debug("Cloning UNBAN to user " + event.getUser().getName() + " / " + event.getUser().getId()
                     + " from server \"" + event.getGuild().getName() + "\" to " + toUpdateGuild.getName());
-            toUpdateGuild.getController().unban(event.getUser().getId()).reason("Cloned from " + event.getGuild().getName()).queue();
+            toUpdateGuild.getController().unban(event.getUser()).reason("Cloned from " + event.getGuild().getName()).queue();
         }
     }
 
@@ -342,10 +350,11 @@ public class TrollBot extends ListenerAdapter {
 
     @Override
     public void onGuildMemberLeave(GuildMemberLeaveEvent event) {
-        if(!verifyGuild(event.getGuild())) {
+        if(!verifyGuild(event.getGuild()) || hasBan(event.getGuild(), event.getUser().getId())) {
             return;
         }
         User leaver = event.getUser();
+
         Guild sourceGuild = event.getGuild();
         Guild toUpdateGuild = getOtherGuild(event.getGuild());
 

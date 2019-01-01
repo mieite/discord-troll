@@ -239,9 +239,15 @@ public class TrollBot extends ListenerAdapter {
         }
         Guild otherGuild = getOtherGuild(event.getGuild());
         Member otherGuildMember = otherGuild.getMember(event.getUser());
-        if(otherGuildMember != null && hasRole(otherGuildMember.getRoles(), roleMember)) {
+        if(otherGuildMember == null) {
+            return;
+        }
+        if(hasRole(otherGuildMember.getRoles(), roleMember)) {
             event.getGuild().getController().addSingleRoleToMember(event.getMember(), getRoleByName(event.getGuild().getRoles(), roleMember))
                                             .reason("cloned from " + otherGuild.getName()).queue();
+        } else if(hasRole(otherGuildMember.getRoles(), roleMute)) {
+            event.getGuild().getController().addSingleRoleToMember(event.getMember(), getRoleByName(event.getGuild().getRoles(), roleMute))
+                    .reason("cloned from " + otherGuild.getName()).queue();
         }
     }
 

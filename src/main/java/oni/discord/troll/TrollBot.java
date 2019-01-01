@@ -187,7 +187,7 @@ public class TrollBot extends ListenerAdapter {
 
         Guild toUpdateGuild = getOtherGuild(event.getGuild());
         Member otherGuildMember = toUpdateGuild.getMember(event.getMember().getUser());
-        if(otherGuildMember != null) {
+        if(otherGuildMember == null) {
             return;
         }
 

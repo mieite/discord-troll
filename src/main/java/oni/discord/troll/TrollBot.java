@@ -288,8 +288,7 @@ public class TrollBot extends ListenerAdapter {
     private boolean dateBetweenRange(OffsetDateTime target, OffsetDateTime compared, int range, TemporalUnit unit) {
         OffsetDateTime start = target.minus(range, unit);
         OffsetDateTime end = target.plus(range, unit);
-
-        return compared.isAfter(start) && compared.isAfter(end);
+        return compared.isAfter(start) && compared.isBefore(end);
     }
 
     private boolean verifyGuild(Guild guild) {
@@ -299,6 +298,4 @@ public class TrollBot extends ListenerAdapter {
     private Guild getOtherGuild(Guild guild) {
         return guild.getId().equals(guild1.getId()) ? guild2 : guild1;
     }
-
-
 }

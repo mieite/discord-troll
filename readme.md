@@ -32,6 +32,8 @@ This bot was built on top of the excellent [JDA (Java Discord Api)](https://gith
 Make sure you have trollbot.properties in the directory where you run the bot. Example configuration file:
 
 ```
+# enable or disable testing
+testing.enabled=
 # bot secret key
 bot.secret=
 # name of the member role, needs to be the same on both discords

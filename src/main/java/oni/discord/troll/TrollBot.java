@@ -194,9 +194,9 @@ public class TrollBot extends ListenerAdapter {
                     // dont autokick admins
                     if(member != null && !member.hasPermission(Permission.ADMINISTRATOR)
                             && logEntry.getCreationTime().isAfter(member.getJoinDate())
-                            && logEntry.getCreationTime().isBefore(OffsetDateTime.now().minus(1, ChronoUnit.DAYS))) {
+                            && logEntry.getCreationTime().isAfter(OffsetDateTime.now().minus(12, ChronoUnit.HOURS))) {
                         logger.debug("Missing kick found: " + logEntry.toString());
-                        target.getController().kick(member, logEntry.getReason() + " / Cloned from " + source.getName());
+                        target.getController().kick(member, logEntry.getReason() + " / Cloned from " + source.getName()).queue();
                     }
                 }
             }

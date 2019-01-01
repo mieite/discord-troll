@@ -188,14 +188,16 @@ public class TrollBot extends ListenerAdapter {
         Guild toUpdateGuild = getOtherGuild(event.getGuild());
         Member otherGuildMember = toUpdateGuild.getMember(event.getMember().getUser());
         if(otherGuildMember != null) {
-            if(hasRole(event.getRoles(), roleMember)) {
-                toUpdateGuild.getController().addSingleRoleToMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMember))
-                        .reason("cloned from " + event.getGuild().getName()).queue();
-            }
-            if(hasRole(event.getRoles(), roleMute)) {
-                toUpdateGuild.getController().addSingleRoleToMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMute))
-                        .reason("cloned from " + event.getGuild().getName()).queue();
-            }
+            return;
+        }
+
+        if(hasRole(event.getRoles(), roleMember)) {
+            toUpdateGuild.getController().addSingleRoleToMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMember))
+                    .reason("cloned from " + event.getGuild().getName()).queue();
+        }
+        if(hasRole(event.getRoles(), roleMute)) {
+            toUpdateGuild.getController().addSingleRoleToMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMute))
+                    .reason("cloned from " + event.getGuild().getName()).queue();
         }
     }
 
@@ -206,7 +208,7 @@ public class TrollBot extends ListenerAdapter {
         }
         Guild toUpdateGuild = getOtherGuild(event.getGuild());
         Member otherGuildMember = toUpdateGuild.getMember(event.getMember().getUser());
-        if(otherGuildMember == null || !otherGuildMember.hasPermission(Permission.ADMINISTRATOR)) {
+        if(otherGuildMember == null) {
             return;
         }
 

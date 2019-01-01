@@ -1,6 +1,7 @@
 package oni.discord.troll;
 
 import net.dv8tion.jda.core.JDA;
+import net.dv8tion.jda.core.Permission;
 import net.dv8tion.jda.core.audit.ActionType;
 import net.dv8tion.jda.core.audit.AuditLogEntry;
 import net.dv8tion.jda.core.entities.Guild;
@@ -13,6 +14,7 @@ import net.dv8tion.jda.core.events.guild.member.GuildMemberLeaveEvent;
 import net.dv8tion.jda.core.events.guild.member.GuildMemberRoleAddEvent;
 import net.dv8tion.jda.core.events.guild.member.GuildMemberRoleRemoveEvent;
 import net.dv8tion.jda.core.hooks.ListenerAdapter;
+import net.dv8tion.jda.core.utils.PermissionUtil;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,7 +40,6 @@ public class TrollBot extends ListenerAdapter {
     private final JDA jda;
     private final Guild guild1;
     private final Guild guild2;
-    private String roleAdmin;
     private String roleMember;
     private String roleMute;
     private List<String> roleOtherMutes;
@@ -51,7 +52,6 @@ public class TrollBot extends ListenerAdapter {
         this.guild1 = jda.getGuildById(properties.getProperty("guilds.1", "0"));
         this.guild2 = jda.getGuildById(properties.getProperty("guilds.2", "0"));
 
-        this.roleAdmin = properties.getProperty("roles.admin");
         this.roleMember = properties.getProperty("roles.member");
         this.roleMute = properties.getProperty("roles.mute");
         String otherMutes = properties.getProperty("roles.otherMuteRoles");
@@ -96,12 +96,13 @@ public class TrollBot extends ListenerAdapter {
 
         for(Member sourceMember : sourceMembers) {
             // ignore admin roles
-            if(sourceMember.getRoles().stream().anyMatch(u -> roleAdmin.equals(u.getName()))) {
+            if(sourceMember.hasPermission(Permission.ADMINISTRATOR)) {
                 continue;
             }
-            Member targetMember = targetMembers.stream().filter(m -> m.getUser().getId().equals(sourceMember.getUser().getId())).findFirst().get();
+            Member targetMember = target.getMemberById(sourceMember.getUser().getId());
             // if user is missing ignore, bans and kicks have already been handled
-            if(targetMember == null) {
+            // also do nothing to admins
+            if(targetMember == null || targetMember.hasPermission(Permission.ADMINISTRATOR)) {
                 continue;
             }
             // check if sourceMember has member role
@@ -109,8 +110,7 @@ public class TrollBot extends ListenerAdapter {
                 // check that sourceMember is on the server and sourceMember status
                 if(!hasRole(targetMember.getRoles(), roleMember)) {
                     // check that sourceMember isn't admin or muted or has other mute roles that remove member role
-                    List<String> roles = Collections.singletonList(roleAdmin);
-                    roles.add(roleMute);
+                    List<String> roles = Collections.singletonList(roleMute);
                     roles.addAll(roleOtherMutes);
                     if(!hasAnyRole(targetMember.getRoles(), roles)) {
                         target.getController().addRolesToMember(targetMember, getRoleByName(guild1.getRoles(), roleMember)).queue();
@@ -118,9 +118,7 @@ public class TrollBot extends ListenerAdapter {
                 }
             // check mute status
             } else if(hasRole(sourceMember.getRoles(), roleMute)) {
-                if(!hasRole(targetMember.getRoles(), roleAdmin)) {
-                    target.getController().addRolesToMember(targetMember, getRoleByName(guild1.getRoles(), roleMute)).queue();
-                }
+                target.getController().addRolesToMember(targetMember, getRoleByName(guild1.getRoles(), roleMute)).queue();
             }
         }
     }
@@ -142,7 +140,7 @@ public class TrollBot extends ListenerAdapter {
                 for(AuditLogEntry logEntry : auditLogEntries) {
                     Member member = target.getMemberById(logEntry.getTargetId());
                     // dont autokick admins
-                    if(member != null && !hasRole(member.getRoles(), roleAdmin)
+                    if(member != null && !member.hasPermission(Permission.ADMINISTRATOR)
                             && logEntry.getCreationTime().isAfter(member.getJoinDate())) {
                         target.getController().kick(member, logEntry.getReason() + " / Cloned from " + source.getName());
                     }
@@ -204,7 +202,7 @@ public class TrollBot extends ListenerAdapter {
         }
         Guild toUpdateGuild = getOtherGuild(event.getGuild());
         Member otherGuildMember = toUpdateGuild.getMemberById(event.getMember().getUser().getId());
-        if(!hasRole(otherGuildMember.getRoles(), roleAdmin) && hasRole(event.getRoles(), roleMember)) {
+        if(!otherGuildMember.hasPermission(Permission.ADMINISTRATOR) && hasRole(event.getRoles(), roleMember)) {
             toUpdateGuild.getController().removeSingleRoleFromMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMember))
                                                     .reason("cloned from " + event.getGuild().getName()).queue();
         }
@@ -218,7 +216,7 @@ public class TrollBot extends ListenerAdapter {
         }
         Guild toUpdateGuild = getOtherGuild(event.getGuild());
         Member otherGuildMember = toUpdateGuild.getMemberById(event.getUser().getId());
-        if(otherGuildMember == null || !hasRole(otherGuildMember.getRoles(), roleAdmin)) {
+        if(otherGuildMember == null || !otherGuildMember.hasPermission(Permission.ADMINISTRATOR)) {
             toUpdateGuild.getController().ban(event.getUser().getId(), 0, "cloned from " + event.getGuild().getName()).queue();
         }
     }

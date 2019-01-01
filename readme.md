@@ -33,18 +33,18 @@ Make sure you have trollbot.properties in the directory where you run the bot. E
 
 ```
 # enable or disable testing
-testing.enabled=
+testing.enabled=true|false
 # bot secret key
 bot.secret=
 # name of the member role, needs to be the same on both discords
-roles.member=
+roles.member=Member
 # name of the mute role, needs to be the same on both discords
-roles.mute=Mute
-# other roles that might remove member role (besides mute) that need to be taken into accord
+roles.mute=Muted
+# Comma separated list of other roles preventing member role that need to be taken into accord
 roles.otherMuteRoles=Gatherban
 # managed servers by id
-guilds.1=
-guilds.2=
+guilds.1=123456
+guilds.2=654321
 ```
 
 ## Required bot permissions

@@ -71,7 +71,7 @@ public class TrollBot extends ListenerAdapter {
         }, 1, 5, TimeUnit.SECONDS);
         logger.info("initialized");
         initUserRoles();
-        jda.addEventListener();
+        jda.addEventListener(this);
     }
 
     // check all user roles to verify that current status is OK

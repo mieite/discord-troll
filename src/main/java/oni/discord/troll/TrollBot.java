@@ -373,7 +373,7 @@ public class TrollBot extends ListenerAdapter {
         // check if leaving was a kick. compare dates since there's no direct relation between the event and the audit event
         List<AuditLogEntry> logEvents = sourceGuild.getAuditLogs().type(ActionType.KICK).complete();
         AuditLogEntry auditLogEntry = logEvents.stream().filter(log -> log.getTargetId().equals(event.getUser().getId())
-                && dateBetweenRange(log.getCreationTime(), OffsetDateTime.now(), 10, ChronoUnit.SECONDS)).findFirst().get();
+                && dateBetweenRange(log.getCreationTime(), OffsetDateTime.now(), 10, ChronoUnit.SECONDS)).findFirst().orElse(null);
         if(auditLogEntry != null) {
             logger.debug("Cloning KICK to user " + leaver.getName() + " / " + leaver.getId() + " from server " + event.getGuild().getName()
                                                 + " to server " + toUpdateGuild.getName());

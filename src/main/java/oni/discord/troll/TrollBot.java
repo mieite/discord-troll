@@ -31,9 +31,9 @@ import net.dv8tion.jda.core.events.guild.member.GuildMemberJoinEvent;
 import net.dv8tion.jda.core.events.guild.member.GuildMemberLeaveEvent;
 import net.dv8tion.jda.core.events.guild.member.GuildMemberRoleAddEvent;
 import net.dv8tion.jda.core.events.guild.member.GuildMemberRoleRemoveEvent;
+import net.dv8tion.jda.core.events.message.guild.GuildMessageReceivedEvent;
 import net.dv8tion.jda.core.hooks.ListenerAdapter;
 import org.apache.commons.lang3.StringUtils;
-import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,13 +54,16 @@ public class TrollBot extends ListenerAdapter {
 
     private static Logger logger = LoggerFactory.getLogger(TrollBot.class);
 
+    private static String ROLE_MEMBER = "roles.member.";
+    private static String ROLE_MUTE = "roles.mute.";
+    private static String ROLE_ADD_ROLE_CHANNEL = "roles.addRoleChannel.";
+    private static String ROLE_ADD_ROLE = "roles.addRole.";
+    private static String ROLE_OTHER_MUTE_ROLES = "roles.otherMuteRoles.";
+
     private final Properties properties;
     private final JDA jda;
     private final Guild guild1;
     private final Guild guild2;
-    private String roleMember;
-    private String roleMute;
-    private List<String> roleOtherMutes;
     private ScheduledExecutorService executorService = Executors.newScheduledThreadPool(1);
 
     public TrollBot(JDA jda, Properties properties) {
@@ -69,14 +72,6 @@ public class TrollBot extends ListenerAdapter {
 
         this.guild1 = jda.getGuildById(properties.getProperty("guilds.1", "0"));
         this.guild2 = jda.getGuildById(properties.getProperty("guilds.2", "0"));
-
-        this.roleMember = properties.getProperty("roles.member");
-        this.roleMute = properties.getProperty("roles.mute");
-        String otherMutes = properties.getProperty("roles.otherMuteRoles");
-        if(otherMutes != null) {
-            String[] split = otherMutes.split(",");
-            roleOtherMutes = Arrays.asList(StringUtils.stripAll(split));
-        }
 
         if(guild1 == null || guild2 == null) {
             logger.error("Servers configured wrong or bot not invited to servers, aborting");
@@ -105,17 +100,39 @@ public class TrollBot extends ListenerAdapter {
         logger.info("Initialization completed.");
     }
 
+    private List<String> getOtherMuteRoles(Guild guild) {
+        String otherMutes = getProperty(ROLE_OTHER_MUTE_ROLES, guild);
+        if(otherMutes != null) {
+            String[] split = otherMutes.split(",");
+            return Arrays.asList(StringUtils.stripAll(split));
+        }
+        return new ArrayList<>();
+    }
+
+    private String getGuildId(Guild guild) {
+        if(guild.equals(guild1)) {
+            return "1";
+        } else if(guild.equals(guild2)) {
+            return "2";
+        }
+        return null;
+    }
+
     private boolean verifyRoles(Guild guild) {
         boolean problem = false;
-        if(!hasRole(guild.getRoles(), roleMember)) {
-            logger.warn(guild.getName() + " missing role " + roleMember);
+        if(!hasRole(guild.getRoles(), getProperty(ROLE_MEMBER, guild))) {
+            logger.warn(guild.getName() + " missing member role");
             problem = true;
         }
-        if(!hasRole(guild.getRoles(), roleMute)) {
-            logger.warn(guild.getName() + " missing role " + roleMute);
+        if(!hasRole(guild.getRoles(), getProperty(ROLE_MUTE, guild))) {
+            logger.warn(guild.getName() + " missing mute role");
             problem = true;
         }
         return problem;
+    }
+
+    private String getProperty(String propertyPrefix, Guild guild) {
+        return properties.getProperty(propertyPrefix + getGuildId(guild));
     }
 
     // check all user roles to verify that current status is OK
@@ -145,27 +162,27 @@ public class TrollBot extends ListenerAdapter {
                 continue;
             }
             // check member status
-            if(hasRole(sourceMember.getRoles(), roleMember) && !hasRole(targetMember.getRoles(), roleMember)) {
+            if(hasRole(sourceMember.getRoles(), getProperty(ROLE_MEMBER, source)) && !hasRole(targetMember.getRoles(), getProperty(ROLE_MEMBER, target))) {
                 // don't give member role to users who are still muted or have other roles that require user to
                 // not have member role
-                List<String> roles = getMuteAndOthersList();
-                if(!hasAnyRole(targetMember.getRoles(), roles)) {
-                    target.getController().addSingleRoleToMember(targetMember, getRoleByName(target.getRoles(), roleMember))
+                List<String> muteRoles = getMuteAndOthersList(target);
+                if(!hasAnyRole(targetMember.getRoles(), muteRoles)) {
+                    target.getController().addSingleRoleToMember(targetMember, getRoleById(target.getRoles(), getProperty(ROLE_MEMBER, target)))
                             .reason("Cloned from " + source.getName()).queue();
                 }
             }
             // check mute status
-            if(hasRole(sourceMember.getRoles(), roleMute) && !hasRole(targetMember.getRoles(), roleMute)) {
-                target.getController().addSingleRoleToMember(targetMember, getRoleByName(target.getRoles(), roleMute))
+            if(hasRole(sourceMember.getRoles(), getProperty(ROLE_MUTE, source)) && !hasRole(targetMember.getRoles(), getProperty(ROLE_MUTE, target))) {
+                target.getController().addSingleRoleToMember(targetMember, getRoleById(target.getRoles(), getProperty(ROLE_MUTE, target)))
                             .reason("Cloned from " + source.getName()).queue();
             }
         }
     }
 
-    private List<String> getMuteAndOthersList() {
+    private List<String> getMuteAndOthersList(Guild guild) {
         List<String> roles = new ArrayList<String>();
-        roles.add(roleMute);
-        roles.addAll(roleOtherMutes);
+        roles.add(getProperty(ROLE_MUTE, guild));
+        roles.addAll(getOtherMuteRoles(guild));
         return roles;
     }
 
@@ -213,11 +230,11 @@ public class TrollBot extends ListenerAdapter {
     }
 
     private boolean hasRole(List<Role> roles, String checkRole) {
-        return getRoleByName(roles, checkRole) != null;
+        return getRoleById(roles, checkRole) != null;
     }
 
-    private Role getRoleByName(List<Role> roles, String role) {
-        return roles.stream().filter(x -> role.equalsIgnoreCase(x.getName())).findFirst().orElse(null);
+    private Role getRoleById(List<Role> roles, String roleId) {
+        return roles.stream().filter(x -> roleId.equalsIgnoreCase(x.getId())).findFirst().orElse(null);
     }
 
     private boolean hasBan(Guild guild, String userId) {
@@ -254,17 +271,17 @@ public class TrollBot extends ListenerAdapter {
         }
 
         // don't give member role if user has mute or other roles preventing member roled
-        if(hasRole(event.getRoles(), roleMember) && !hasRole(otherGuildMember.getRoles(), roleMember)
-                && !hasAnyRole(otherGuildMember.getRoles(), getMuteAndOthersList())) {
-            logger.debug("Cloning " + roleMember + " ADD to user " + otherGuildMember.getEffectiveName() + " / " + otherGuildMember.getUser().getId()
+        if(hasRole(event.getRoles(), getProperty(ROLE_MEMBER, event.getGuild())) && !hasRole(otherGuildMember.getRoles(), getProperty(ROLE_MEMBER, toUpdateGuild))
+                && !hasAnyRole(otherGuildMember.getRoles(), getMuteAndOthersList(toUpdateGuild))) {
+            logger.debug("Cloning " + event.getRoles().get(0).getName() + " ADD to user " + otherGuildMember.getEffectiveName() + " / " + otherGuildMember.getUser().getId()
                     + " from server \"" + event.getGuild().getName() + "\" to " + toUpdateGuild.getName());
-            toUpdateGuild.getController().addSingleRoleToMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMember))
+            toUpdateGuild.getController().addSingleRoleToMember(otherGuildMember, getRoleById(toUpdateGuild.getRoles(), getProperty(ROLE_MEMBER, toUpdateGuild)))
                     .reason("Cloned from " + event.getGuild().getName()).queue();
         }
-        if(hasRole(event.getRoles(), roleMute) && !hasRole(otherGuildMember.getRoles(), roleMute)) {
-            logger.debug("Cloning " + roleMute + " ADD to user " + otherGuildMember.getEffectiveName() + " / " + otherGuildMember.getUser().getId()
+        if(hasRole(event.getRoles(), getProperty(ROLE_MUTE, event.getGuild())) && !hasRole(otherGuildMember.getRoles(), getProperty(ROLE_MUTE, toUpdateGuild))) {
+            logger.debug("Cloning " + event.getRoles().get(0).getName() + " ADD to user " + otherGuildMember.getEffectiveName() + " / " + otherGuildMember.getUser().getId()
                     + " from server \"" + event.getGuild().getName() + "\" to " + toUpdateGuild.getName());
-            toUpdateGuild.getController().addSingleRoleToMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMute))
+            toUpdateGuild.getController().addSingleRoleToMember(otherGuildMember, getRoleById(toUpdateGuild.getRoles(), getProperty(ROLE_MUTE, toUpdateGuild)))
                     .reason("Cloned from " + event.getGuild().getName()).queue();
         }
     }
@@ -282,16 +299,16 @@ public class TrollBot extends ListenerAdapter {
             return;
         }
 
-        if(hasRole(event.getRoles(), roleMember) && hasRole(otherGuildMember.getRoles(), roleMember)) {
-            logger.debug("Cloning " + roleMember + " REMOVE to user " + otherGuildMember.getEffectiveName() + " / " + otherGuildMember.getUser().getId()
+        if(hasRole(event.getRoles(), getProperty(ROLE_MEMBER, event.getGuild())) && hasRole(otherGuildMember.getRoles(), getProperty(ROLE_MEMBER, toUpdateGuild))) {
+            logger.debug("Cloning " + event.getRoles().get(0).getName() + " REMOVE to user " + otherGuildMember.getEffectiveName() + " / " + otherGuildMember.getUser().getId()
                     + " from server \"" + event.getGuild().getName() + "\" to " + toUpdateGuild.getName());
-            toUpdateGuild.getController().removeSingleRoleFromMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMember))
+            toUpdateGuild.getController().removeSingleRoleFromMember(otherGuildMember, getRoleById(toUpdateGuild.getRoles(), getProperty(ROLE_MEMBER, toUpdateGuild)))
                                                     .reason("Cloned from " + event.getGuild().getName()).queue();
         }
-        if(hasRole(event.getRoles(), roleMute) && hasRole(otherGuildMember.getRoles(), roleMute)) {
-            logger.debug("Cloning " + roleMute + " REMOVE to user " + otherGuildMember.getEffectiveName() + " / " + otherGuildMember.getUser().getId()
+        if(hasRole(event.getRoles(), getProperty(ROLE_MUTE, event.getGuild())) && hasRole(otherGuildMember.getRoles(), getProperty(ROLE_MUTE, toUpdateGuild))) {
+            logger.debug("Cloning " + event.getRoles().get(0).getName() + " REMOVE to user " + otherGuildMember.getEffectiveName() + " / " + otherGuildMember.getUser().getId()
                     + " from server \"" + event.getGuild().getName() + "\" to " + toUpdateGuild.getName());
-            toUpdateGuild.getController().removeSingleRoleFromMember(otherGuildMember, getRoleByName(toUpdateGuild.getRoles(), roleMute))
+            toUpdateGuild.getController().removeSingleRoleFromMember(otherGuildMember, getRoleById(toUpdateGuild.getRoles(), getProperty(ROLE_MUTE, toUpdateGuild)))
                     .reason("Cloned from " + event.getGuild().getName()).queue();
         }
 
@@ -343,16 +360,39 @@ public class TrollBot extends ListenerAdapter {
         if(otherGuildMember == null) {
             return;
         }
-        if(hasRole(otherGuildMember.getRoles(), roleMember)) {
-            logger.debug("Cloning " + roleMember + " to JOIN user " + event.getUser().getName() + " / " + event.getUser().getId()
+        if(hasRole(otherGuildMember.getRoles(), getProperty(ROLE_MEMBER, otherGuild))) {
+            logger.debug("Cloning member role to JOIN user " + event.getUser().getName() + " / " + event.getUser().getId()
                     + " from server \"" + event.getGuild().getName() + "\" to " + otherGuild.getName());
-            event.getGuild().getController().addSingleRoleToMember(event.getMember(), getRoleByName(event.getGuild().getRoles(), roleMember))
+            event.getGuild().getController().addSingleRoleToMember(event.getMember(), getRoleById(event.getGuild().getRoles(), getProperty(ROLE_MEMBER, event.getGuild())))
                                             .reason("Cloned from " + otherGuild.getName()).queue();
-        } else if(hasRole(otherGuildMember.getRoles(), roleMute)) {
-            logger.debug("Cloning " + roleMute + " to JOIN user " + event.getUser().getName() + " / " + event.getUser().getId()
+        }
+        if(hasRole(otherGuildMember.getRoles(), getProperty(ROLE_MUTE, otherGuild))) {
+            logger.debug("Cloning mute to JOIN user " + event.getUser().getName() + " / " + event.getUser().getId()
                     + " from server \"" + event.getGuild().getName() + "\" to " + otherGuild.getName());
-            event.getGuild().getController().addSingleRoleToMember(event.getMember(), getRoleByName(event.getGuild().getRoles(), roleMute))
+            event.getGuild().getController().addSingleRoleToMember(event.getMember(), getRoleById(event.getGuild().getRoles(), getProperty(ROLE_MUTE, event.getGuild())))
                     .reason("Cloned from " + otherGuild.getName()).queue();
+        }
+    }
+
+    @Override
+    public void onGuildMessageReceived(GuildMessageReceivedEvent event) {
+        if(!verifyGuild(event.getGuild())) {
+            return;
+        }
+        if(event.getChannel().getId().equals(getProperty(ROLE_ADD_ROLE_CHANNEL, event.getGuild()))) {
+            Member member = event.getMember();
+            String contentRaw = event.getMessage().getContentRaw();
+            String addRoleId = getProperty(ROLE_ADD_ROLE, event.getGuild());
+            Role addRole = getRoleById(event.getGuild().getRoles(), addRoleId);
+            if(contentRaw.startsWith(".gatherer") && !hasRole(member.getRoles(), addRoleId)) {
+                event.getGuild().getController().addSingleRoleToMember(member, addRole).queue();
+                event.getChannel().sendMessage("<@" + member.getUser().getId() + "> kuuluu nyt kerääjiin").queue();
+            } else if(contentRaw.startsWith(".ungatherer") && hasRole(member.getRoles(), addRoleId)) {
+                event.getGuild().getController().removeSingleRoleFromMember(member, addRole).queue();
+                event.getChannel().sendMessage("<@" + member.getUser().getId() + "> on luovuttaja.").queue();
+            } else if(contentRaw.startsWith(".allgatherers")) {
+                event.getChannel().sendMessage("Kerääjäklaanissa on yhteensä " + event.getGuild().getMembersWithRoles(addRole).size() + " jäsentä.").queue();
+            }
         }
     }
 

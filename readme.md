@@ -7,6 +7,12 @@ and admins.
 Kick and Ban propagation is prevented from Administrators, so if you want to get rid of your rival admins you have to
 remove the role from them first on every server.
 
+Changelog:
+
+0.3:
+ - added UTF-8 support to property files
+ - added option to send greetings message and a reminder message to users on servers that require member roles
+
 ## How it works
 
 ### Startup
@@ -49,8 +55,19 @@ roles.addRoleChannel.1=<id>
 # Id of the role users can request
 roles.addRole.1=<id>
 # managed servers by id
-guilds.1=123456
-guilds.2=654321
+guilds.1=<"master"_server_id>
+guilds.2=<other_server_id>
+
+# spam non member users
+nonMemberSpam.enabled=true|false
+# join message for new users giving instructions on how to gain member role, for example
+nonMemberSpam.joinMessage=<message>
+# reminder message on how to get member role, sent to users in intervals defined by other properties
+nonMemberSpam.reminderMessage=<reminder message>
+# reminder message interval days, used as a modulo from total days since joining
+nonMemberSpam.reminderMessage.intervalDays=1+
+# reminder message daily run time
+nonMemberSpam.reminderMessage.runTime=<hh:mm>
 ```
 
 ## Required bot permissions

@@ -37,7 +37,12 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.Charset;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalUnit;
 import java.util.*;
@@ -97,7 +102,27 @@ public class TrollBot extends ListenerAdapter {
             }, 1, 5, TimeUnit.SECONDS);
         }
 
+        if(isRemindersEnabled()) {
+            String propertyRunTime = properties.getProperty("nonMemberSpam.reminderMessage.runTime", "09:00");
+            LocalTime time = LocalTime.parse(propertyRunTime).withNano(0);
+            LocalDateTime firstRunTime = LocalDateTime.now().withHour(time.getHour()).withMinute(time.getMinute()).withSecond(0).withNano(0);
+            if(LocalDateTime.now().isAfter(firstRunTime)) {
+                firstRunTime = firstRunTime.plus(1, ChronoUnit.DAYS);
+            }
+            Duration initialDelay = Duration.between(LocalDateTime.now(), firstRunTime);
+
+            executorService.scheduleAtFixedRate(new Runnable() {
+                @Override
+                public void run() {
+                    remindNonMembers(guild1);
+                }
+            }, initialDelay.getSeconds(), TimeUnit.DAYS.toSeconds(1), TimeUnit.SECONDS);
+        }
         logger.info("Initialization completed.");
+    }
+
+    private boolean isRemindersEnabled() {
+        return properties.getProperty("nonMemberSpam.enabled", "false").equalsIgnoreCase("true");
     }
 
     private List<String> getOtherMuteRoles(Guild guild) {
@@ -357,20 +382,26 @@ public class TrollBot extends ListenerAdapter {
         }
         Guild otherGuild = getOtherGuild(event.getGuild());
         Member otherGuildMember = otherGuild.getMember(event.getUser());
-        if(otherGuildMember == null) {
-            return;
+        boolean hasRole = false;
+        if(otherGuildMember != null) {
+            if (hasRole(otherGuildMember.getRoles(), getProperty(ROLE_MEMBER, otherGuild))) {
+                logger.debug("Cloning member role to JOIN user " + event.getUser().getName() + " / " + event.getUser().getId()
+                        + " from server \"" + event.getGuild().getName() + "\" to " + otherGuild.getName());
+                event.getGuild().getController().addSingleRoleToMember(event.getMember(), getRoleById(event.getGuild().getRoles(), getProperty(ROLE_MEMBER, event.getGuild())))
+                        .reason("Cloned from " + otherGuild.getName()).queue();
+                hasRole = true;
+            }
+            if (hasRole(otherGuildMember.getRoles(), getProperty(ROLE_MUTE, otherGuild))) {
+                logger.debug("Cloning mute to JOIN user " + event.getUser().getName() + " / " + event.getUser().getId()
+                        + " from server \"" + event.getGuild().getName() + "\" to " + otherGuild.getName());
+                event.getGuild().getController().addSingleRoleToMember(event.getMember(), getRoleById(event.getGuild().getRoles(), getProperty(ROLE_MUTE, event.getGuild())))
+                        .reason("Cloned from " + otherGuild.getName()).queue();
+                hasRole = true;
+            }
         }
-        if(hasRole(otherGuildMember.getRoles(), getProperty(ROLE_MEMBER, otherGuild))) {
-            logger.debug("Cloning member role to JOIN user " + event.getUser().getName() + " / " + event.getUser().getId()
-                    + " from server \"" + event.getGuild().getName() + "\" to " + otherGuild.getName());
-            event.getGuild().getController().addSingleRoleToMember(event.getMember(), getRoleById(event.getGuild().getRoles(), getProperty(ROLE_MEMBER, event.getGuild())))
-                                            .reason("Cloned from " + otherGuild.getName()).queue();
-        }
-        if(hasRole(otherGuildMember.getRoles(), getProperty(ROLE_MUTE, otherGuild))) {
-            logger.debug("Cloning mute to JOIN user " + event.getUser().getName() + " / " + event.getUser().getId()
-                    + " from server \"" + event.getGuild().getName() + "\" to " + otherGuild.getName());
-            event.getGuild().getController().addSingleRoleToMember(event.getMember(), getRoleById(event.getGuild().getRoles(), getProperty(ROLE_MUTE, event.getGuild())))
-                    .reason("Cloned from " + otherGuild.getName()).queue();
+        if(isRemindersEnabled() && !hasRole) {
+            String message = properties.getProperty("nonMemberSpam.joinMessage");
+            event.getUser().openPrivateChannel().queue((channel) -> channel.sendMessage(message).queue());
         }
     }
 
@@ -425,6 +456,32 @@ public class TrollBot extends ListenerAdapter {
         OffsetDateTime start = target.minus(range, unit);
         OffsetDateTime end = target.plus(range, unit);
         return compared.isAfter(start) && compared.isBefore(end);
+    }
+
+    private void remindNonMembers(Guild guild) {
+        logger.info("sending reminder messages to users");
+        String message = properties.getProperty("nonMemberSpam.reminderMessage");
+        String memberRoleId = properties.getProperty("roles.member." + getGuildId(guild));
+        int remindInterval = Integer.parseInt(properties.getProperty("nonMemberSpam.reminderMessage.intervalDays", "7"));
+        List<Member> all = guild.getMembers();
+        Role memberRole = guild.getRoleById(memberRoleId);
+        int count = 0;
+        for(Member member : all) {
+            if(jda.getSelfUser().getId().equals(member.getUser().getId())
+                    || member.getRoles().contains(memberRole)
+                    || member.hasPermission(Permission.ADMINISTRATOR)
+                    || member.getUser().isBot()) {
+                continue;
+            }
+            Duration timeOnServer = Duration.between(member.getJoinDate(), OffsetDateTime.now());
+            long days = timeOnServer.toDays();
+            if(days % remindInterval == 0) {
+                String personalizedMessage = message.replace("%days%", String.valueOf(days));
+                member.getUser().openPrivateChannel().queue((channel) -> channel.sendMessage(personalizedMessage).queue());
+                count++;
+            }
+        }
+        logger.info("sent reminder messages to " + count + " users");
     }
 
     private boolean verifyGuild(Guild guild) {

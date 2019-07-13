@@ -26,6 +26,8 @@ import javax.security.auth.login.LoginException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.Charset;
 import java.util.Properties;
 
 /**
@@ -40,7 +42,7 @@ public class Main {
     public static void main(String[] args) {
         try {
             Properties properties = new Properties();
-            properties.load(new FileInputStream(new File("trollbot.properties")));
+            properties.load(new InputStreamReader(new FileInputStream(new File("trollbot.properties")), Charset.forName("utf-8")));
             JDA jda = new JDABuilder(properties.getProperty("bot.secret")).build();
             jda.awaitReady();
             trollBot = new TrollBot(jda, properties);
